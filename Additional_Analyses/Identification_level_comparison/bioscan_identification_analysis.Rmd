@@ -1,0 +1,92 @@
+---
+title: "bioscan_identification_analysis"
+author: "Charles Lehnen"
+date: "10/3/2022"
+output: pdf_document
+---
+
+````{r setup, include=FALSE}
+
+rm(list=ls()) 
+
+knitr::opts_chunk$set(echo = TRUE)
+
+require(tidyverse)
+require(ggplot2)
+```
+
+# Read in data
+
+```{r}
+master_species_list <- read_csv("../../data/master_species_list.csv",show_col_types = FALSE)
+
+# Remove special characters and replace spaces with underscores
+master_species_list <- master_species_list %>%
+  mutate(Genus_species = gsub("[^[:alnum:]\\s_[:space:]]", "", Genus_species)) %>%
+  mutate(Genus_species = gsub("[\\ ]", "_", Genus_species))
+
+
+# Add group column
+master_species_list_grouped <- master_species_list %>%
+  mutate(Group = ifelse(Class == "Arachnida", "Arachnida",
+                  ifelse(Order == "Hymenoptera", "Hymenoptera",
+                    ifelse(Order == "Lepidoptera", "Lepidoptera", Family)))) %>%
+  filter(!is.na(Group))
+
+
+# Colorblind color palette
+cbPalette <- c("#999999", "#E69F00", "#F0E442", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")
+
+
+```
+
+```{r}
+
+
+summarized_data <- master_species_list_grouped %>% 
+  group_by(Group, Level_of_identification) %>% 
+  summarize(Percent = n() / nrow(master_species_list_grouped)) %>%
+  ungroup()
+
+summarized_data$Level_of_identification <- factor(summarized_data$Level_of_identification, levels = c("Order", "Family", "Genus", "Morphospecies", "Species"))
+
+ggplot(summarized_data, aes(x = Group, y = Percent, fill = Level_of_identification)) +
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Group", y = "Percent", fill = "Level of Identification") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_fill_manual(values = cbPalette)
+
+ggsave("Identification_level_bar_chart_percents.tiff")
+
+
+```
+
+```{r}
+
+# Set order of ranks
+master_species_list$Level_of_identification <- factor(master_species_list$Level_of_identification, levels = c("Order", "Family", "Genus", "Morphospecies", "Species"))
+
+
+facet_plotter <- function(filter_n = 1000) {
+  master_species_list_plot <- master_species_list %>%
+    group_by(Family) %>%
+    filter(n() <= filter_n) %>%
+    ungroup() %>%
+    ggplot(., aes(x = Family, fill = Level_of_identification)) +
+      geom_bar() +
+      scale_fill_manual(values = cbPalette) +
+      facet_grid(~ Order, scales = "free_x", space = "free") +
+      theme(axis.text.x = element_text(angle = 90), legend.position = "top") +
+      labs(title = paste0("Families; <=",filter_n))
+
+  ggsave(paste0("Identification_level_bar_chart_max_",filter_n,".tiff"))
+}
+
+facet_plotter()
+facet_plotter(20)
+facet_plotter(5)
+
+
+```

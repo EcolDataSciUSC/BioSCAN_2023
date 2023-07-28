@@ -1,0 +1,31 @@
+model
+{
+    mu.p.0 ~ dnorm(0.00000E+00, 0.01)
+    sigma.p.sp ~ dunif(0.00000E+00, 10)
+    tau.p.sp <- 1/(sigma.p.sp * sigma.p.sp)
+    mu.p.month.quad ~ dnorm(0.00000E+00, 0.01)
+    T(, 0.00000E+00)
+    mu.psi.0 ~ dnorm(0.00000E+00, 0.01)
+    sigma.psi.sp ~ dunif(0.00000E+00, 10)
+    tau.psi.sp <- 1/(sigma.psi.sp * sigma.psi.sp)
+    for (sp in 1:nsp) {
+        psi.sp[sp] ~ dnorm(0.00000E+00, tau.psi.sp)
+    }
+    mu.psi.ocean.effect ~ dnorm(0.00000E+00, 0.01)
+    sigma.psi.ocean.effect ~ dunif(0.00000E+00, 10)
+    tau.psi.ocean.effect <- 1/(sigma.psi.ocean.effect * sigma.psi.ocean.effect)
+    for (sp in 1:nsp) {
+        psi.ocean.effect[sp] ~ dnorm(mu.psi.ocean.effect, tau.psi.ocean.effect)
+    }
+    for (ind in 1:nind) {
+        logit(psi[ind]) <- mu.psi.0 + psi.sp[sp[ind]] + psi.ocean.effect[sp[ind]] * 
+            ocean_effect[site[ind]]
+        logit(p[ind]) <- mu.p.0 + mu.p.month.quad * month_det[site[ind], 
+            visit[ind]]^2
+    }
+    for (ind in 1:nind) {
+        Z[ind] ~ dbern(psi[ind])
+        mu.p[ind] <- Z[ind] * p[ind]
+        X[ind] ~ dbern(mu.p[ind])
+    }
+}

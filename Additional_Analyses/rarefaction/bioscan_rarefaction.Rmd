@@ -1,0 +1,170 @@
+---
+title: "bioscan_rarefaction"
+author: "Charles Lehnen and Teagan Baiotto"
+date: "9/28/2022"
+output: pdf_document
+---
+
+# Import Packages:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+
+require(tidyverse)
+require(ggplot2)
+require(vegan)
+require(readxl)
+require(patchwork)
+require(cowplot)
+
+```
+
+```{r}
+
+# Load data
+original_data <- read.csv("../data/bioscan_survey_data.csv")
+
+# This is just to convert back to original format with Phase and Site columns so that I do not have to modify other code
+
+original_data <- original_data %>%
+  mutate(
+    split_id = strsplit(id, "_"),
+    Phase = as.numeric(sapply(split_id, "[[", 3)),
+    Site = paste0("Site", sapply(split_id, "[[", 4))
+  ) %>%
+  select(id, Phase, Site, everything()) %>%
+  select(-split_id)
+
+
+
+```
+
+
+# Data pre-processing, Site Selection:
+## This is wrong because Monthly Combined All is wrong
+
+```{r}
+# Choose site
+my_site <- "Site01"
+
+comm <- original_data %>%
+  dplyr::select(c(3,6:ncol(original_data))) %>% #select only site and species columns
+  dplyr::filter(Site == my_site) %>% #filter list rows for specific site
+  dplyr::select(-1) %>% #SAC requires only species columns
+  na.omit() #remove NA rows
+
+```
+
+# Rarefaction curves for a single site:
+
+```{r}
+
+# basic rarefaction curve from https://rdrr.io/rforge/vegan/man/rarefy.html
+
+# "Function specnumber finds the number of species. With MARGIN = 2, it finds frequencies of species. If groups is given, finds the total number of species in each group (see example on finding one kind of beta diversity with this option)."
+
+S <- specnumber(comm) # observed number of species
+raremax <- min(rowSums(comm))
+
+# "Function rarefy gives the expected species richness in random subsamples of size sample from the community. The size of sample should be smaller than total community size, but the function will work for larger sample as well (with a warning) and return non-rarefied species richness (and standard error = 0). If sample is a vector, rarefaction of all observations is performed for each sample size separately. Rarefaction can be performed only with genuine counts of individuals. The function rarefy is based on Hurlbert's (1971) formulation, and the standard errors on Heck et al. (1975)."
+
+Srare <- rarefy(comm, raremax)
+plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+#abline(0, 1)
+
+# "Function rarecurve draws a rarefaction curve for each row of the input data. The rarefaction curves are evaluated using the interval of step sample sizes, always including 1 and total sample size. If sample is specified, a vertical line is drawn at sample with horizontal lines for the rarefied species richnesses."
+
+rarecurve(comm, step = 20, sample = raremax, col = "blue", cex = 0.6)
+v = 43
+abline(v=v)
+text(43, 35, labels = v, pos = 2, srt = 90)
+```
+
+# Rarefaction curves comparing phases
+
+```{r}
+each_phase <- original_data %>%
+dplyr::select(c(2,6:ncol(original_data))) #select only phase and species columns
+
+each_phase <- aggregate(.~Phase,data=each_phase,FUN=sum) # combine samples within same site
+row.names(each_phase) <- each_phase$Phase
+each_phase <- each_phase %>%
+  dplyr::select(-1) %>% #remove site column
+  na.omit() %>% #remove NA rows
+  rename_with(make.names) #trim column names just in case
+
+S <- specnumber(each_phase) # observed number of species at each site during entire sampling period for certain phase
+raremax <- min(rowSums(each_phase))
+
+# "Function rarefy gives the expected species richness in random subsamples of size sample from the community. The size of sample should be smaller than total community size, but the function will work for larger sample as well (with a warning) and return non-rarefied species richness (and standard error = 0). If sample is a vector, rarefaction of all observations is performed for each sample size separately. Rarefaction can be performed only with genuine counts of individuals. The function rarefy is based on Hurlbert's (1971) formulation, and the standard errors on Heck et al. (1975)."
+
+
+Srare <- rarefy(each_phase, raremax)
+plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species", main="Comparing Phases")
+#abline(0, 1)
+## converting so can save with ggsave
+Srare_plot <- recordPlot() 
+Srare_plot <- as_grob(Srare_plot)
+ggsave("Rarefaction_all_phases_scatter.tiff", Srare_plot)
+
+# "Function rarecurve draws a rarefaction curve for each row of the input data. The rarefaction curves are evaluated using the interval of step sample sizes, always including 1 and total sample size. If sample is specified, a vertical line is drawn at sample with horizontal lines for the rarefied species richnesses."
+
+
+rarecurve(each_phase, step = 20, sample = raremax, label=TRUE)
+## converting so can save with ggsave
+Srare_plot <- recordPlot() 
+Srare_plot <- as_grob(Srare_plot)
+ggsave("Rarefaction_all_phases_curve.tiff", Srare_plot)
+
+
+```
+
+# Rarefaction curves for each phase:
+
+```{r}
+Srare_plots <- list()
+Rarecurve_plots <- list()
+
+for (phase in unique(original_data$Phase)) {
+  
+  by_phase <- original_data %>%
+  dplyr::select(c(2:3,6:ncol(original_data))) %>% #select only phase, site, and species columns
+  dplyr::filter(Phase == phase) %>% #filter by phase
+  dplyr::select(-1) %>% #remove phase column
+  na.omit() %>% #remove NA rows
+  rename_with(make.names) #trim column names just in case
+  
+  by_phase <- aggregate(.~Site,data=by_phase,FUN=sum) # combine samples within same site
+  row.names(by_phase) <- by_phase$Site
+  by_phase <- by_phase %>%
+    # filter(!(row.names(by_phase) %in% "Site20")) %>% # use this if needed
+    dplyr::select(-1) %>% #remove site column
+    na.omit() %>% #remove NA rows
+    rename_with(make.names) #trim column names just in case
+  
+  S <- specnumber(by_phase) # observed number of species at each site during entire sampling period for certain phase
+  raremax <- min(rowSums(by_phase))
+  
+  # "Function rarefy gives the expected species richness in random subsamples of size sample from the community. The size of sample should be smaller than total community size, but the function will work for larger sample as well (with a warning) and return non-rarefied species richness (and standard error = 0). If sample is a vector, rarefaction of all observations is performed for each sample size separately. Rarefaction can be performed only with genuine counts of individuals. The function rarefy is based on Hurlbert's (1971) formulation, and the standard errors on Heck et al. (1975)."
+  
+  Srare <- rarefy(by_phase, raremax)
+  plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species", main=phase)
+  
+  # "Function rarecurve draws a rarefaction curve for each row of the input data. The rarefaction curves are evaluated using the interval of step sample sizes, always including 1 and total sample size. If sample is specified, a vertical line is drawn at sample with horizontal lines for the rarefied species richnesses."
+  
+  rarecurve(by_phase, step = 20, sample = raremax, label=TRUE)
+  ## converting so can use with patchwork
+  Rarecurve_plot <- recordPlot()
+  Rarecurve_plot <- as_grob(Rarecurve_plot) 
+  Rarecurve_plots[[length(Rarecurve_plots) + 1]] <- Rarecurve_plot
+}
+
+
+pdf()
+patchwork::wrap_plots(Rarecurve_plots)
+ggsave("Rarefaction_each_phase_curve.tiff", width = 30, height = 10)
+dev.off()
+
+```

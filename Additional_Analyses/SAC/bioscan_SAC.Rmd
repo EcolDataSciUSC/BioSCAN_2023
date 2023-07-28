@@ -1,0 +1,160 @@
+---
+title: "bioscan_species_accumulation_curves"
+author: "Charles Lehnen"
+output: pdf_document
+---
+
+## Set-up Environment
+
+```{r setup, include=FALSE}
+
+rm(list=ls()) 
+
+knitr::opts_chunk$set(echo = TRUE)
+require(vegan)
+require(ggplot2)
+require(readxl)
+require(tidyverse)
+require(patchwork)
+require(cowplot)
+```
+
+### Import and wrangle data
+
+```{r import data, include=FALSE}
+# Load data
+original_data <- read.csv("../data/bioscan_survey_data.csv")
+
+# This is just to convert back to original format with Phase and Site columns so that I do not have to modify other code
+
+original_data <- original_data %>%
+  mutate(
+    split_id = strsplit(id, "_"),
+    Phase = as.numeric(sapply(split_id, "[[", 3)),
+    Site = paste0("Site", sapply(split_id, "[[", 4))
+  ) %>%
+  select(id, Phase, Site, everything()) %>%
+  select(-split_id)
+
+# Get distinct Phases/Sites for mapply()
+site_table <- original_data %>%
+  distinct(Phase, Site)
+```
+
+### Define function
+
+```{r define functions, include=FALSE}
+
+# Define SAC function
+
+SAC_plots <- list()
+
+SAC_sites <- function(phase, site) {
+  
+  comm <- original_data %>%
+    dplyr::select(c(3,6:ncol(original_data))) %>% #select only site and species columns
+    dplyr::filter(Site == site) %>% #filter for rows for specific site
+    dplyr::select(-1) %>% #SAC requires only species columns
+    na.omit() %>% #remove NA rows
+    rename_with(make.names) #trim column names just in case
+  
+  acc <- specaccum(comm, "random") #calculate species accumulation curve
+  
+  ## Fit Arrhenius models to all random accumulations
+  mods <- fitspecaccum(acc, "arrh")
+  
+  ## Plot results, overlay with boxplots, record plot so that can be used by plot_grid
+  plot(mods, col="hotpink", main = paste("Phase", phase, site))
+  boxplot(acc, col = "yellow", border = "blue", lty=1, cex=0.3, add= TRUE)
+  #add unique plot and plot name to variables
+  SAC_plot <<- recordPlot()
+  SAC_plot <<- as_grob(SAC_plot) 
+  SAC_plots[[length(SAC_plots) + 1]] <<- SAC_plot
+}
+
+
+
+```
+
+# Run function
+
+```{r, include=FALSE}
+
+mapply(SAC_sites, site_table$Phase, site_table$Site, SIMPLIFY=FALSE)
+
+```
+
+# Save plots
+
+```{r, include = FALSE}
+
+pdf()
+patchwork::wrap_plots(SAC_plots) + plot_layout(ncol = 3)
+ggsave("SAC_plots_all_sites.pdf", width = 20, height = 100, limitsize = FALSE)
+dev.off()
+
+```
+
+
+## Repeat for all phases aggregated
+
+```{r define functions, include=FALSE}
+
+# Define function
+
+# Empty the list
+SAC_plots <- list()
+
+SAC_phases <- function(phase, site) {
+  
+  comm <- original_data %>%
+    dplyr::select(c(2,6:ncol(original_data))) %>% #select only phase and species columns
+    dplyr::filter(Phase == phase) %>% #filter for rows for specific phase
+    dplyr::select(-1) %>% #SAC requires only species columns
+    na.omit() %>% #remove NA rows
+    rename_with(make.names) #trim column names just in case
+  
+  acc <- specaccum(comm, "random") #calculate species accumulation curve
+  
+  ## Fit Arrhenius models to all random accumulations
+  mods <- fitspecaccum(acc, "arrh")
+  
+  ## Plot results, overlay with boxplots, record plot so that can be used by plot_grid
+  plot(mods, col="hotpink", main = paste("Phase", phase))
+  boxplot(acc, col = "yellow", border = "blue", lty=1, cex=0.3, add= TRUE)
+  #add unique plot and plot name to variables
+  SAC_plot <<- recordPlot()
+  SAC_plot <<- as_grob(SAC_plot) 
+  SAC_plots[[length(SAC_plots) + 1]] <<- SAC_plot
+}
+
+```
+
+# Run function
+
+```{r, include=FALSE}
+
+mapply(SAC_phases, unique(site_table$Phase), SIMPLIFY=FALSE)
+
+```
+
+# Save plots
+
+```{r, include = FALSE}
+
+pdf()
+patchwork::wrap_plots(SAC_plots) + plot_layout(ncol = 3)
+ggsave("SAC_plots_phases_aggregated.pdf", width = 80, height = 50, limitsize = FALSE)
+dev.off()
+
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,25 @@
+---
+title: "bioscan_network_analysis"
+author: "Charles Lehnen"
+date: "10/4/2022"
+output: pdf_document
+---
+
+````{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+require(readxl)
+require(tidyverse)
+require(ggplot2)
+
+```
+
+```{r}
+# create matrix 
+## https://www.r-bloggers.com/2012/07/r-for-ecologists-creating-a-site-x-species-matrix/
+
+# use netassoc 
+## https://onlinelibrary.wiley.com/doi/pdfdirect/10.1111/ecog.01892?casa_token=rhB8ljVBOTMAAAAA:pia5joR8xNcdmLUVAex6zPgND0BR34W6SY5nvBkH4HDDaeguxR8GJphZRNNpnzTyM5SoeCtubozR2kI
+## http://www.ecography.org/appendix/ecog-01892
+```
+
