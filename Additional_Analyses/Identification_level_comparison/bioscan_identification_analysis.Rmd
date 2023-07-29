@@ -90,3 +90,30 @@ facet_plotter(5)
 
 
 ```
+
+
+
+```{r}
+library(cowplot)
+
+# Set order of ranks
+master_species_list$Level_of_identification <- factor(master_species_list$Level_of_identification, levels = c("Order", "Family", "Genus", "Morphospecies", "Species"))
+
+taxonomy_identification_clean <-   master_species_list %>%
+  group_by(Family) %>%
+  ungroup() %>%
+  filter(!is.na(Order)) %>%
+  ggplot(., aes(x = Family, fill = Level_of_identification)) +
+  geom_bar() +
+  scale_fill_manual(name = "Level of identification", values = cbPalette) +
+  facet_grid(~ Order, scales = "free_x", space = "free") +
+  theme_cowplot() +
+  theme(axis.text.x = element_text(angle = 90), 
+        legend.position = "top",
+        strip.background = element_blank()) +
+  ylab("Number of species/morphospecies") 
+
+ggsave(taxonomy_identification_clean, file = "S1.png", width = 12)
+
+
+```
