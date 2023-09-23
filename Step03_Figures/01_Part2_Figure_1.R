@@ -8,6 +8,10 @@ library(ggmap)
 library(vegan)
 library(readxl)
 library(rje)
+library(gridExtra)
+library(grid)
+library(ggplot2)
+library(cowplot)
 
 getwd()
 
@@ -288,9 +292,9 @@ for (group in names(groups_and_models)) {
   groups.975[[group]] <- stack()
   
   ##Import your model outputs
-  res <- readRDS(paste0("Outputs/res_", paste0(group, "_",model, ".rds")))
-  res.summary <- readRDS(paste0("Outputs/res.summary_", paste0(group, "_",model, ".rds")))
-  my.data <- readRDS(paste0("Data/clean_data/data_prepared/my_data_",  paste0(year_range, collapse = "_"), "_", group, "_spatial", ".rds"))
+  res <- readRDS(paste0("model_outputs/res_", paste0(group, "_",model, ".rds")))
+  res.summary <- readRDS(paste0("model_outputs/res.summary_", paste0(group, "_",model, ".rds")))
+  my.data <- readRDS(paste0("clean_data/data_prepared/my_data_",  paste0(year_range, collapse = "_"), "_", group, "_spatial", ".rds"))
   
   mcmc_matrix <- as.matrix(res$mcmc[1][[1]])
   
@@ -305,10 +309,10 @@ for (group in names(groups_and_models)) {
     sp.p.stack <- stack()
     
     for (iter in 1:nrow(mcmc_matrix)) {
-    
+      
       iteration_values <- mcmc_matrix[iter,]
       group.intercept <- iteration_values['mu.psi.0']
-    
+      
       sp.intercept <- iteration_values[paste0('psi.sp[', i,']')]
       sp.temp <- iteration_values[paste0('psi.temp[', i,']')]
       sp.temp.diurnal <- iteration_values[paste0('psi.temp.diurnal[', i,']')] 
@@ -353,11 +357,15 @@ for (group in names(groups_and_models)) {
 
 
 # Save outputs
-saveRDS(groups.025, file = "Step03_Figures/figure_1_temp/groups_025.rds")
-saveRDS(groups.50, file = "Step03_Figures/figure_1_temp/groups_50.rds")
-saveRDS(groups.975, file = "Step03_Figures/figure_1_temp/groups_975.rds")
+saveRDS(groups.025, file = "Figure_2/groups_025.rds")
+saveRDS(groups.50, file = "Figure_2/groups_50.rds")
+saveRDS(groups.975, file = "Figure_2/groups_975.rds")
 
 
+
+########################################
+###### Richness Map ####################
+########################################
 
 groups.025.sum <- stack()
 groups.50.sum <- stack()
@@ -377,10 +385,10 @@ for (group in names(groups.50)) {
   richness_spdf <- as(group.sp.richness, "SpatialPixelsDataFrame")
   richness_df <- as.data.frame(richness_spdf)
   colnames(richness_df) <- c("Richness", "Longitude", "Latitude")
-
+  
   # Define color palette
-  pal <- pnw_palette("Bay", 35)
-
+  pal <- colorRampPalette(c('#0A718F', '#fae7af', '#E7720B', '#DD4124'))(255)
+  
   # Which sites sampled for this group?
   if (group == "Lepidoptera") {
     group.sites <- site.points.df[site.points.df$Phase %in% c("1"), ]
@@ -391,37 +399,66 @@ for (group in names(groups.50)) {
   } else {
     group.sites <- site.points.df
   }
-
+  
+  groupName <- c()
+  if (group == "Tipulomorpha") {groupName <- "Tipuloidea"}
+  else {groupName <- group}
+  
   # Define basemap
   bbox <- extent(group.sp.richness)
   sq_map1 <- get_stamenmap(bbox = c(left = bbox@xmin, bottom = bbox@ymin, right = bbox@xmax - 0.3, top = bbox@ymax), maptype = "toner-lite")
-
-  ggmap(sq_map1) +
+  
+  # For group-level maps, must create empty basemap
+  empty_plot <- ggplot(richness_df, aes(x = Longitude, y = Latitude)) +
+    geom_blank() +
+    theme_void()
+  
+  # group-level plot
+  empty_plot +
     geom_tile(data = richness_df, aes(x = Longitude, y = Latitude, fill = floor(Richness)), alpha = 0.8) +
-    scale_fill_gradientn(colours = pal) +
+    scale_fill_gradientn(colours = pal, breaks = c(floor(min(richness_df$Richness)),floor(max(richness_df$Richness)))) +
     theme(panel.background = element_blank()) +
     theme(legend.position="bottom") +
-    theme(legend.key.width=unit(2, "cm")) +
-    labs(fill = paste0(group, " ", "Richness")) +
-    xlab("Longitude") +
-    ylab("Latitude")  +
-    geom_point(data = group.sites, aes(x = Longitude, y = Latitude, shape = Phase), color = "black", size = 2.5) +
-    scale_shape_manual(values = c("1" = 16, "2" = 17, "3" = 15))
-
+    # theme(legend.key.width=unit(2, "cm")) +
+    labs(fill = paste0(groupName, " ", "Richness")) +
+    theme(axis.text.x = element_blank()) +
+    theme(axis.text.y = element_blank()) +
+    theme(axis.text = element_blank(),
+          axis.title = element_blank()) +
+    # xlab("Longitude") +
+    # ylab("Latitude")  +
+    geom_point(data = group.sites, aes(x = Longitude, y = Latitude, shape = Phase), color = "black", size = 1) +
+    scale_shape_manual(values = c("1" = 16, "2" = 17, "3" = 15)) +
+    guides(shape = FALSE, color = guide_legend())
+  
+  
   # Display the plot
-  plot(last_plot())
+  # plot(last_plot())
+  
+  # Save the group level plot for use in a minute
+  if (group == "Phoridae") {
+    Phoridae_plot <- last_plot()
+  }
+  else if (group == "Syrphidae") {
+    Syrphidae_plot <- last_plot()
+  }
+  else if (group == "Tipulomorpha") {
+    Tipulomorpha_plot <- last_plot()
+  }
+  else if (group == "Drosophilidae") {
+    Drosophilidae_plot <- last_plot()
+  }
+  else if (group == "Mycetophilidae") {
+    Mycetophilidae_plot <- last_plot()
+  }
+  else if (group == "Araneae") {
+    Araneae_plot <- last_plot()
+  }
 }
 
-
-########################################
-###### Richness Map ####################
-########################################
-
-# plot species richness
+# plot species richness - informally
 sp.richness <- sum(groups.50.sum)
-
 plot(sp.richness)
-
 
 # Turn into df for plotting
 richness_spdf <- as(sp.richness, "SpatialPixelsDataFrame")
@@ -429,15 +466,13 @@ richness_df <- as.data.frame(richness_spdf)
 colnames(richness_df) <- c("Richness", "Longitude", "Latitude")
 
 # Define color palette
-pal <- pnw_palette("Bay", 35)
-
-
+pal <- colorRampPalette(c('#0A718F', '#fae7af', '#E7720B', '#DD4124'))(255)
 
 # Define basemap
 bbox <- extent(sp.richness)
 sq_map1 <- get_stamenmap(bbox = c(left = bbox@xmin, bottom = bbox@ymin, right = bbox@xmax - 0.3, top = bbox@ymax), maptype = "toner-lite")
 
-ggmap(sq_map1) +
+richness <- ggmap(sq_map1) +
   geom_tile(data = richness_df, aes(x = Longitude, y = Latitude, fill = floor(Richness)), alpha = 0.8) +
   scale_fill_gradientn(colours = pal) + 
   theme(panel.background = element_blank()) +
@@ -449,7 +484,31 @@ ggmap(sq_map1) +
   geom_point(data = site.points.df, aes(x = Longitude, y = Latitude, shape = Phase), color = "black", size = 2.5) +
   scale_shape_manual(values = c("1" = 16, "2" = 17, "3" = 15))
 
-# Plot CI
+
+# CREATE FIGURE 1
+fig1 <- grid.arrange(richness, Phoridae_plot, Syrphidae_plot, Tipulomorpha_plot, Drosophilidae_plot, Mycetophilidae_plot, Araneae_plot,
+                     widths = c(4, 1.5, 1.5),
+                     heights = c(1, 1, 1),
+                     layout_matrix = rbind(c(1, 2, 3),
+                                           c(1, 4, 5),
+                                           c(1, 6, 7)))
+# add subplot labels
+fig1 <- ggdraw(fig1) +
+  draw_text("a", x = 0.02, y = 0.95, size = 24, fontface = "bold") +
+  draw_text("b", x = 0.57, y = 0.95, size = 24, fontface = "bold") +
+  draw_text("c", x = 0.78, y = 0.95, size = 24, fontface = "bold") + 
+  draw_text("d", x = 0.57, y = 0.62, size = 24, fontface = "bold") + 
+  draw_text("e", x = 0.78, y = 0.62, size = 24, fontface = "bold") +
+  draw_text("f", x = 0.57, y = 0.3, size = 24, fontface = "bold") +
+  draw_text("g", x = 0.78, y = 0.3, size = 24, fontface = "bold")
+
+# Then export image with dimensions 16x6.66
+ggsave("Fig1.png",plot=fig1, dpi=500, height=6.66, width=16, bg="white")
+
+
+
+
+# Plot CI, supplementary
 lower <- sum(groups.025.sum)
 upper <- sum(groups.975.sum)
 
